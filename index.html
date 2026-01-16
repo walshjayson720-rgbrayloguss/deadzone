@@ -2,38 +2,110 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Zombie Shooter</title>
+<title>Deadwave</title>
 <style>
-body { margin:0; background:#111; overflow:hidden; }
-canvas { display:block; }
+body {
+  margin:0;
+  background:#0b0b0b;
+  overflow:hidden;
+  font-family: Arial, sans-serif;
+}
+canvas { display:none; }
+
+/* MAIN MENU */
+#menu {
+  position:fixed;
+  inset:0;
+  background:radial-gradient(circle, #111, #000);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  color:white;
+  z-index:10;
+}
+#menu h1 {
+  font-size:72px;
+  letter-spacing:4px;
+}
+.menu-btn {
+  padding:15px 40px;
+  margin:10px;
+  font-size:20px;
+  background:#222;
+  border:2px solid white;
+  color:white;
+  cursor:pointer;
+}
+.menu-btn:hover { background:#444; }
+
+/* SHOP */
 #shop {
-  position:absolute; inset:0;
-  background:rgba(0,0,0,.85);
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.9);
+  display:none;
+  color:white;
+  text-align:center;
+}
+#shop h2 { margin-top:60px; }
+
+.perks {
+  display:flex;
+  justify-content:center;
+  gap:20px;
+  margin-top:40px;
+}
+.perk {
+  width:200px;
+  padding:20px;
+  border:2px solid white;
+  background:#111;
+  cursor:pointer;
+}
+.perk:hover { background:#222; }
+
+/* SETTINGS */
+#settings {
+  position:fixed;
+  inset:0;
+  background:#000;
   color:white;
   display:none;
   text-align:center;
   padding-top:100px;
 }
-button { padding:10px 20px; margin:8px; font-size:16px; }
-#fullscreen {
-  position:absolute; bottom:10px; right:10px;
-}
 </style>
 </head>
 <body>
 
-<canvas id="game"></canvas>
-
-<div id="shop">
-  <h1>PERK SHOP (Choose One)</h1>
-  <button onclick="perk('damage')">+1 Damage</button>
-  <button onclick="perk('regen')">Faster Regen</button>
-  <button onclick="perk('firerate')">Faster Fire Rate</button>
-  <br><br>
-  <button onclick="nextWave()">Next Wave</button>
+<div id="menu">
+  <h1>DEADWAVE</h1>
+  <p>Click anywhere to start</p>
+  <button class="menu-btn" onclick="startGame()">Play</button>
+  <button class="menu-btn" onclick="openSettings()">Settings</button>
 </div>
 
-<button id="fullscreen" onclick="toggleFS()">Fullscreen</button>
+<div id="settings">
+  <h2>Settings</h2>
+  <p>Music Volume</p>
+  <input type="range" min="0" max="1" step="0.01" value="0.5" oninput="bgm.volume=this.value">
+  <br><br>
+  <button class="menu-btn" onclick="closeSettings()">Back</button>
+</div>
+
+<div id="shop">
+  <h2>Choose a Perk</h2>
+  <div class="perks">
+    <div class="perk" onclick="perk('damage')">+1 Damage</div>
+    <div class="perk" onclick="perk('regen')">Faster Regen</div>
+    <div class="perk" onclick="perk('firerate')">Faster Fire Rate</div>
+  </div>
+  <br><br>
+  <button class="menu-btn" onclick="nextWave()">Continue</button>
+</div>
+
+<canvas id="game"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
@@ -41,8 +113,12 @@ const ctx = canvas.getContext("2d");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-let save = JSON.parse(localStorage.getItem("zombieSave")) || {};
+// MUSIC
+const bgm = new Audio("https://cdn.pixabay.com/download/audio/2022/10/25/audio_6b7b2d90b4.mp3");
+bgm.loop = true;
+bgm.volume = 0.5;
 
+// GAME STATE
 const player = {
   x: canvas.width/2,
   y: canvas.height/2,
@@ -54,19 +130,34 @@ const player = {
 };
 
 let bullets=[], zombies=[], keys={}, mouse={x:0,y:0};
-let wave = save.wave || 1;
-let kills = save.kills || 0;
-let damage = save.damage || 1;
-let shootCooldown = save.cooldown || 500;
-let regenBonus = save.regen || 0;
-let lastShot=0;
-let inShop=false;
+let wave=1, kills=0, damage=1, regenBonus=0;
+let shootCooldown=500, lastShot=0, inShop=false;
+const mapPadding = 60;
 
+// INPUT
 addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
 addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 addEventListener("mousemove",e=>{mouse.x=e.clientX;mouse.y=e.clientY});
 addEventListener("mousedown",shoot);
 
+// MENU
+function startGame(){
+  document.getElementById("menu").style.display="none";
+  canvas.style.display="block";
+  bgm.play();
+  spawnWave();
+  update();
+}
+function openSettings(){
+  document.getElementById("menu").style.display="none";
+  document.getElementById("settings").style.display="block";
+}
+function closeSettings(){
+  document.getElementById("settings").style.display="none";
+  document.getElementById("menu").style.display="flex";
+}
+
+// SHOOT
 function shoot(){
   if(inShop || Date.now()-lastShot<shootCooldown) return;
   lastShot=Date.now();
@@ -74,74 +165,79 @@ function shoot(){
   bullets.push({x:player.x,y:player.y,dx:Math.cos(a)*10,dy:Math.sin(a)*10});
 }
 
+// ZOMBIES
 function spawnZombie(type){
   let z={x:Math.random()*canvas.width,y:Math.random()*canvas.height};
-  if(type==="fast"){ z.r=15; z.speed=3+wave*.05; z.health=2; }
-  else if(type==="tank"){ z.r=28; z.speed=1; z.health=6+wave; }
-  else if(type==="boss"){ z.r=40; z.speed=1+wave*.05; z.health=15+wave*2; z.boss=true; }
-  else { z.r=20; z.speed=1.5+wave*.03; z.health=3; }
+  if(type==="fast"){z.r=15;z.speed=3;z.health=2;}
+  else if(type==="tank"){z.r=28;z.speed=1;z.health=6+wave;}
+  else if(type==="boss"){z.r=40;z.speed=1+wave*.05;z.health=15+wave*2;z.boss=true;}
+  else {z.r=20;z.speed=1.5;z.health=3;}
   z.maxHealth=z.health;
   zombies.push(z);
 }
-
 function spawnWave(){
   zombies=[];
   for(let i=0;i<wave*2;i++){
-    const r=Math.random();
-    spawnZombie(r<.2?"fast":r<.35?"tank":"normal");
+    spawnZombie(Math.random()<.2?"fast":Math.random()<.35?"tank":"normal");
   }
   if(wave%10===0) spawnZombie("boss");
 }
 
+// SHOP
 function perk(p){
   if(p==="damage") damage++;
   if(p==="regen") regenBonus+=0.05;
   if(p==="firerate" && shootCooldown>200) shootCooldown-=50;
-  saveGame();
 }
-
 function nextWave(){
   inShop=false;
   document.getElementById("shop").style.display="none";
   wave++;
   spawnWave();
-  saveGame();
 }
 
-function saveGame(){
-  localStorage.setItem("zombieSave",JSON.stringify({
-    wave,kills,damage,cooldown:shootCooldown,regen:regenBonus
-  }));
-}
-
-function toggleFS(){
-  if(!document.fullscreenElement) document.body.requestFullscreen();
-  else document.exitFullscreen();
-}
-
+// GAME LOOP
 function update(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
+  // MAP GRID
+  ctx.strokeStyle="#1a1a1a";
+  for(let i=0;i<canvas.width;i+=60){
+    ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke();
+  }
+  for(let i=0;i<canvas.height;i+=60){
+    ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke();
+  }
+
+  // MOVEMENT + BARRIERS
   if(keys.w) player.y-=player.speed;
   if(keys.s) player.y+=player.speed;
   if(keys.a) player.x-=player.speed;
   if(keys.d) player.x+=player.speed;
 
-  // player
-  ctx.fillStyle="#d2b48c";
-  ctx.beginPath(); ctx.arc(player.x,player.y,player.r,0,Math.PI*2); ctx.fill();
+  player.x=Math.max(mapPadding,Math.min(canvas.width-mapPadding,player.x));
+  player.y=Math.max(mapPadding,Math.min(canvas.height-mapPadding,player.y));
 
-  // gun
+  // PLAYER
+  ctx.fillStyle="#d2b48c";
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+  ctx.fill();
+
+  // GUN
   const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
-  ctx.strokeStyle="#000"; ctx.lineWidth=5;
+  ctx.strokeStyle="#000";
+  ctx.lineWidth=5;
   ctx.beginPath();
   ctx.moveTo(player.x,player.y);
   ctx.lineTo(player.x+Math.cos(a)*30,player.y+Math.sin(a)*30);
   ctx.stroke();
 
+  // BULLETS
   bullets.forEach((b,i)=>{
     b.x+=b.dx; b.y+=b.dy;
-    ctx.fillStyle="#fff"; ctx.fillRect(b.x,b.y,4,4);
+    ctx.fillStyle="#fff";
+    ctx.fillRect(b.x,b.y,4,4);
     zombies.forEach((z,zi)=>{
       if(Math.hypot(b.x-z.x,b.y-z.y)<z.r){
         z.health-=damage;
@@ -149,12 +245,12 @@ function update(){
         if(z.health<=0){
           zombies.splice(zi,1);
           kills++;
-          if(z.boss) for(let m=0;m<5;m++) spawnZombie("fast");
         }
       }
     });
   });
 
+  // ZOMBIES
   zombies.forEach(z=>{
     const a=Math.atan2(player.y-z.y,player.x-z.x);
     z.x+=Math.cos(a)*z.speed;
@@ -168,7 +264,9 @@ function update(){
     }
 
     ctx.fillStyle=z.boss?"#8b0000":z.r<18?"#00ff00":"#228b22";
-    ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(z.x,z.y,z.r,0,Math.PI*2);
+    ctx.fill();
 
     ctx.fillStyle="red";
     ctx.fillRect(z.x-20,z.y-z.r-10,40,5);
@@ -176,12 +274,15 @@ function update(){
     ctx.fillRect(z.x-20,z.y-z.r-10,40*(z.health/z.maxHealth),5);
   });
 
+  // REGEN
   if(Date.now()-player.lastHit>3000 && player.health<player.maxHealth){
     player.health+=0.1+regenBonus;
   }
 
-  ctx.fillStyle="white"; ctx.font="20px Arial";
-  ctx.fillText("Wave: "+wave, canvas.width-120,30);
+  // UI
+  ctx.fillStyle="white";
+  ctx.font="20px Arial";
+  ctx.fillText("Wave: "+wave,canvas.width-120,30);
   ctx.fillText("Kills: "+kills,20,30);
 
   ctx.fillStyle="red";
@@ -196,9 +297,6 @@ function update(){
 
   requestAnimationFrame(update);
 }
-
-spawnWave();
-update();
 </script>
 </body>
 </html>
