@@ -1,240 +1,242 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Top Down Zombie Shooter</title>
+<title>Deadwave</title>
 <style>
-  body {
-    margin: 0;
-    background: #111;
-    overflow: hidden;
-  }
-  canvas {
-    display: block;
-    margin: auto;
-    background: #222;
-  }
+body {
+  margin:0;
+  background:#111;
+  overflow:hidden;
+  font-family: Arial, sans-serif;
+}
+canvas { display:none; }
+
+/* LOADING SCREEN */
+#loading {
+  position:fixed;
+  inset:0;
+  background:#111;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  color:white;
+  z-index:10;
+}
+
+#title {
+  font-size:64px;
+  font-weight:bold;
+  margin-bottom:30px;
+}
+
+#bar {
+  width:300px;
+  height:20px;
+  border:2px solid white;
+}
+#fill {
+  width:0%;
+  height:100%;
+  background:lime;
+}
+
+#tip {
+  margin-top:20px;
+  opacity:.7;
+}
+
+/* GAME UI */
+#shop {
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.85);
+  color:white;
+  display:none;
+  text-align:center;
+  padding-top:100px;
+}
+button { padding:10px 20px; margin:8px; font-size:16px; }
 </style>
 </head>
 <body>
 
-<canvas id="game" width="800" height="600"></canvas>
+<!-- LOADING SCREEN -->
+<div id="loading">
+  <div id="title">DEADWAVE</div>
+  <div id="bar"><div id="fill"></div></div>
+  <div id="tip">Survive the waves.</div>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="shop">
+  <h1>PERK SHOP</h1>
+  <button onclick="perk('damage')">+1 Damage</button>
+  <button onclick="perk('regen')">Faster Regen</button>
+  <button onclick="perk('firerate')">Faster Fire Rate</button>
+  <br><br>
+  <button onclick="nextWave()">Next Wave</button>
+</div>
 
 <script>
+/* ---------- LOADING ---------- */
+let progress = 0;
+const fill = document.getElementById("fill");
+const loading = document.getElementById("loading");
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
 
-// ---------------- PLAYER ----------------
+const loader = setInterval(() => {
+  progress += Math.random() * 10;
+  if (progress >= 100) {
+    progress = 100;
+    clearInterval(loader);
+    loading.style.opacity = "0";
+    setTimeout(() => {
+      loading.style.display = "none";
+      canvas.style.display = "block";
+      startGame();
+    }, 500);
+  }
+  fill.style.width = progress + "%";
+}, 200);
+
+/* ---------- GAME ---------- */
+function startGame() {
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
 const player = {
-  x: 400,
-  y: 300,
-  radius: 15,
-  speed: 3,
-  maxHealth: 100,
+  x: canvas.width/2,
+  y: canvas.height/2,
+  r: 18,
   health: 100,
-  regenDelay: 3000,
+  maxHealth: 100,
+  speed: 4,
   lastHit: 0
 };
 
-// ---------------- GAME STATE ----------------
-let bullets = [];
-let zombies = [];
-let keys = {};
-let mouse = { x: 0, y: 0 };
-let fireRate = 300;
-let lastShot = 0;
-let wave = 1;
+let bullets=[], zombies=[], keys={}, mouse={x:0,y:0};
+let wave=1, kills=0, damage=1, regenBonus=0;
+let shootCooldown=500, lastShot=0, inShop=false;
 
-// ---------------- PERKS (MERGED) ----------------
-const perks = [
-  {
-    id: "faster_fire",
-    apply() {
-      fireRate *= 0.85;
-    }
-  },
-  {
-    id: "faster_regen",
-    apply() {
-      player.regenDelay *= 0.7;
-    }
-  },
-  {
-    id: "more_health",
-    apply() {
-      player.maxHealth += 25;
-      player.health += 25;
-    }
-  },
-  {
-    id: "more_speed",
-    apply() {
-      player.speed *= 1.15;
-    }
+addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+addEventListener("mousemove",e=>{mouse.x=e.clientX;mouse.y=e.clientY});
+addEventListener("mousedown",shoot);
+
+function shoot(){
+  if(inShop || Date.now()-lastShot<shootCooldown) return;
+  lastShot=Date.now();
+  const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
+  bullets.push({x:player.x,y:player.y,dx:Math.cos(a)*10,dy:Math.sin(a)*10});
+}
+
+function spawnZombie(type){
+  let z={x:Math.random()*canvas.width,y:Math.random()*canvas.height};
+  if(type==="fast"){z.r=15;z.speed=3;z.health=2;}
+  else if(type==="tank"){z.r=28;z.speed=1;z.health=6+wave;}
+  else if(type==="boss"){z.r=40;z.speed=1+wave*.05;z.health=15+wave*2;z.boss=true;}
+  else {z.r=20;z.speed=1.5;z.health=3;}
+  z.maxHealth=z.health;
+  zombies.push(z);
+}
+
+function spawnWave(){
+  zombies=[];
+  for(let i=0;i<wave*2;i++){
+    spawnZombie(Math.random()<.2?"fast":Math.random()<.3?"tank":"normal");
   }
-];
-
-function applyRandomPerk() {
-  const perk = perks[Math.floor(Math.random() * perks.length)];
-  perk.apply();
+  if(wave%10===0) spawnZombie("boss");
 }
 
-// ---------------- INPUT ----------------
-window.addEventListener("keydown", e => keys[e.key] = true);
-window.addEventListener("keyup", e => keys[e.key] = false);
-
-canvas.addEventListener("mousemove", e => {
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = e.clientX - rect.left;
-  mouse.y = e.clientY - rect.top;
-});
-
-canvas.addEventListener("mousedown", shoot);
-
-// ---------------- SHOOTING ----------------
-function shoot() {
-  if (Date.now() - lastShot < fireRate) return;
-  lastShot = Date.now();
-
-  const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-  bullets.push({
-    x: player.x,
-    y: player.y,
-    dx: Math.cos(angle) * 7,
-    dy: Math.sin(angle) * 7
-  });
+function perk(p){
+  if(p==="damage") damage++;
+  if(p==="regen") regenBonus+=0.05;
+  if(p==="firerate" && shootCooldown>200) shootCooldown-=50;
 }
 
-// ---------------- ZOMBIES ----------------
-function spawnWave() {
-  for (let i = 0; i < wave * 3; i++) {
-    zombies.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      radius: 18,
-      speed: 1 + wave * 0.1,
-      health: 40 + wave * 10
-    });
-  }
+function nextWave(){
+  inShop=false;
+  document.getElementById("shop").style.display="none";
+  wave++;
+  spawnWave();
 }
 
-spawnWave();
+function update(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-// ---------------- DAMAGE + REGEN ----------------
-function takeDamage(amount) {
-  player.health -= amount;
-  player.lastHit = Date.now();
-  if (player.health < 0) player.health = 0;
-}
+  if(keys.w) player.y-=player.speed;
+  if(keys.s) player.y+=player.speed;
+  if(keys.a) player.x-=player.speed;
+  if(keys.d) player.x+=player.speed;
 
-function regenHealth() {
-  if (Date.now() - player.lastHit > player.regenDelay) {
-    player.health += 0.05;
-    if (player.health > player.maxHealth)
-      player.health = player.maxHealth;
-  }
-}
+  ctx.fillStyle="#d2b48c";
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+  ctx.fill();
 
-// ---------------- UPDATE ----------------
-function update() {
-  // Movement
-  let dx = 0, dy = 0;
-  if (keys["w"]) dy--;
-  if (keys["s"]) dy++;
-  if (keys["a"]) dx--;
-  if (keys["d"]) dx++;
+  const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
+  ctx.strokeStyle="#000";
+  ctx.lineWidth=5;
+  ctx.beginPath();
+  ctx.moveTo(player.x,player.y);
+  ctx.lineTo(player.x+Math.cos(a)*30,player.y+Math.sin(a)*30);
+  ctx.stroke();
 
-  player.x += dx * player.speed;
-  player.y += dy * player.speed;
-
-  // Bullets
-  bullets.forEach(b => {
-    b.x += b.dx;
-    b.y += b.dy;
-  });
-
-  // Zombies
-  zombies.forEach(z => {
-    const angle = Math.atan2(player.y - z.y, player.x - z.x);
-    z.x += Math.cos(angle) * z.speed;
-    z.y += Math.sin(angle) * z.speed;
-
-    const dist = Math.hypot(player.x - z.x, player.y - z.y);
-    if (dist < player.radius + z.radius) {
-      takeDamage(10);
-    }
-  });
-
-  // Bullet collision
-  bullets.forEach((b, bi) => {
-    zombies.forEach((z, zi) => {
-      const dist = Math.hypot(b.x - z.x, b.y - z.y);
-      if (dist < z.radius) {
-        z.health -= 20;
-        bullets.splice(bi, 1);
-        if (z.health <= 0) zombies.splice(zi, 1);
+  bullets.forEach((b,i)=>{
+    b.x+=b.dx; b.y+=b.dy;
+    ctx.fillStyle="#fff";
+    ctx.fillRect(b.x,b.y,4,4);
+    zombies.forEach((z,zi)=>{
+      if(Math.hypot(b.x-z.x,b.y-z.y)<z.r){
+        z.health-=damage;
+        bullets.splice(i,1);
+        if(z.health<=0){ zombies.splice(zi,1); kills++; }
       }
     });
   });
 
-  // New wave + perk
-  if (zombies.length === 0) {
-    wave++;
-    applyRandomPerk();
-    spawnWave();
+  zombies.forEach(z=>{
+    const a=Math.atan2(player.y-z.y,player.x-z.x);
+    z.x+=Math.cos(a)*z.speed;
+    z.y+=Math.sin(a)*z.speed;
+
+    if(Math.hypot(player.x-z.x,player.y-z.y)<player.r+z.r){
+      if(Date.now()-player.lastHit>800){
+        player.health-=10;
+        player.lastHit=Date.now();
+      }
+    }
+
+    ctx.fillStyle=z.boss?"#8b0000":"#228b22";
+    ctx.beginPath();
+    ctx.arc(z.x,z.y,z.r,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  if(Date.now()-player.lastHit>3000 && player.health<player.maxHealth){
+    player.health+=0.1+regenBonus;
   }
 
-  regenHealth();
+  ctx.fillStyle="white";
+  ctx.font="20px Arial";
+  ctx.fillText("Wave: "+wave,canvas.width-120,30);
+  ctx.fillText("Kills: "+kills,20,30);
+
+  if(zombies.length===0 && !inShop){
+    inShop=true;
+    document.getElementById("shop").style.display="block";
+  }
+
+  requestAnimationFrame(update);
 }
 
-// ---------------- DRAW ----------------
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Player
-  ctx.fillStyle = "tan";
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Bullets
-  ctx.fillStyle = "yellow";
-  bullets.forEach(b => {
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  // Zombies + health bars
-  zombies.forEach(z => {
-    ctx.fillStyle = "green";
-    ctx.beginPath();
-    ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "red";
-    ctx.fillRect(z.x - 15, z.y - 25, 30 * (z.health / (40 + wave * 10)), 4);
-  });
-
-  // Player health bar (bottom middle)
-  ctx.fillStyle = "red";
-  ctx.fillRect(300, 560, 200 * (player.health / player.maxHealth), 10);
-
-  // Wave counter (top right)
-  ctx.fillStyle = "white";
-  ctx.font = "16px Arial";
-  ctx.fillText("Wave: " + wave, 700, 20);
+spawnWave();
+update();
 }
-
-// ---------------- LOOP ----------------
-function loop() {
-  update();
-  draw();
-  requestAnimationFrame(loop);
-}
-
-loop();
 </script>
-
 </body>
 </html>
