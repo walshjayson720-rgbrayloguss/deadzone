@@ -62,248 +62,227 @@ canvas { display:none; }
   border:2px solid white;
   background:#111;
   cursor:pointer;
-  position:relative;
 }
-.perk.selected {
-  border-color:#00ffea;
-  box-shadow:0 0 15px #00ffea;
-}
-.perk small {
-  display:block;
-  margin-top:10px;
-  color:#aaa;
-  font-size:14px;
-}
-.stack {
-  position:absolute;
-  top:5px;
-  right:8px;
-  background:#00ffea;
-  color:black;
-  font-size:14px;
-  padding:2px 6px;
-  border-radius:10px;
-}
-
-/* SETTINGS */
-#settings {
-  position:fixed;
-  inset:0;
-  background:#000;
-  color:white;
-  display:none;
-  text-align:center;
-  padding-top:100px;
-}
-
-/* STATS HUD */
-#stats{
-  position:fixed;
-  top:10px;
-  left:10px;
-  background:rgba(0,0,0,.6);
-  color:white;
-  font-size:12px;
-  padding:8px;
-  line-height:1.4;
-  display:none;
-  pointer-events:none;
-}
-
-/* PAUSE */
-#pauseBtn{
-  position:fixed;
-  top:10px;
-  right:10px;
-  z-index:5;
-  padding:6px 14px;
-  font-size:14px;
-  background:#222;
-  color:white;
-  border:1px solid white;
-  cursor:pointer;
-  display:none;
-}
-#pauseOverlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.7);
-  color:white;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  flex-direction:column;
-  z-index:20;
-}
+.perk:hover { background:#222; }
 </style>
 </head>
 <body>
 
 <div id="menu">
   <h1>DEADWAVE</h1>
+  <p>Click Play to start</p>
   <button class="menu-btn" onclick="startGame()">Play</button>
-  <button class="menu-btn" onclick="openSettings()">Settings</button>
-</div>
-
-<div id="settings">
-  <h2>Settings</h2>
-  <p>Music Volume</p>
-  <input type="range" min="0" max="1" step="0.01" value="0.5" oninput="bgm.volume=this.value">
-  <br><br>
-  <button class="menu-btn" onclick="closeSettings()">Back</button>
 </div>
 
 <div id="shop">
   <h2>Choose a Perk</h2>
   <div class="perks">
-    <div class="perk" data-perk="damage" onclick="selectPerk(this)">+1 Damage<small>More bullet damage</small><div class="stack" id="stack-damage">0</div></div>
-    <div class="perk" data-perk="regen" onclick="selectPerk(this)">Regen<small>Heal faster</small><div class="stack" id="stack-regen">0</div></div>
-    <div class="perk" data-perk="firerate" onclick="selectPerk(this)">Fire Rate<small>Shoot faster</small><div class="stack" id="stack-firerate">0</div></div>
-    <div class="perk" data-perk="speed" onclick="selectPerk(this)">Speed<small>Move faster</small><div class="stack" id="stack-speed">0</div></div>
+    <div class="perk" onclick="perk('damage')">+1 Damage</div>
+    <div class="perk" onclick="perk('regen')">Faster Regen</div>
+    <div class="perk" onclick="perk('firerate')">Faster Fire Rate</div>
+    <div class="perk" onclick="perk('speed')">+Speed</div>
   </div>
-  <br><button class="menu-btn" onclick="confirmPerk()">Continue</button>
+  <br><br>
+  <button class="menu-btn" onclick="nextWave()">Continue</button>
 </div>
 
 <canvas id="game"></canvas>
 
-<div id="stats">
-<b>STATS</b><br>
-Damage: <span id="s-dmg"></span><br>
-Fire: <span id="s-fire"></span><br>
-Speed: <span id="s-speed"></span><br>
-Regen: <span id="s-regen"></span><br>
-</div>
-
-<button id="pauseBtn" onclick="togglePause()">PAUSE</button>
-
-<div id="pauseOverlay">
-  <h1>PAUSED</h1>
-  <button class="menu-btn" onclick="togglePause()">Resume</button>
-
-  <p>Music Volume</p>
-  <input type="range" min="0" max="1" step="0.01" oninput="bgm.volume=this.value">
-
-  <hr>
-
-  <b>KEYBINDS</b><br><br>
-  Up <button id="bind-up" onclick="startRebind('up')">W</button>
-  Down <button id="bind-down" onclick="startRebind('down')">S</button>
-  Left <button id="bind-left" onclick="startRebind('left')">A</button>
-  Right <button id="bind-right" onclick="startRebind('right')">D</button>
-  Pause <button id="bind-pause" onclick="startRebind('pause')">P</button>
-
-  <hr>
-
-  <b>RUN STATS</b><br>
-  Wave <span id="p-wave"></span><br>
-  Kills <span id="p-kills"></span><br>
-</div>
-
 <script>
-const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
-canvas.width=innerWidth;canvas.height=innerHeight;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
 
-const bgm=new Audio("https://cdn.pixabay.com/download/audio/2022/10/25/audio_6b7b2d90b4.mp3");
-bgm.loop=true;bgm.volume=0.5;
+// MUSIC
+const bgm = new Audio("https://cdn.pixabay.com/download/audio/2022/10/25/audio_6b7b2d90b4.mp3");
+bgm.loop = true;
+bgm.volume = 0.5;
 
-const player={x:canvas.width/2,y:canvas.height/2,r:18,health:100,maxHealth:100,speed:4,lastHit:0};
-let bullets=[],zombies=[],keys={},mouse={x:0,y:0};
-let wave=1,kills=0,damage=1,regenBonus=0,shootCooldown=500,lastShot=0,inShop=false;
-let selectedPerk=null,paused=false,rebinding=null;
-let perkStacks={damage:0,regen:0,firerate:0,speed:0};
-let keybinds={up:"w",down:"s",left:"a",right:"d",pause:"p"};
+// GAME STATE
+let paused = false;
 
+const player = {
+  x: canvas.width/2,
+  y: canvas.height/2,
+  r: 18,
+  health: 100,
+  maxHealth: 100,
+  speed: 4,
+  lastHit: 0
+};
+
+let bullets=[], zombies=[], keys={}, mouse={x:0,y:0};
+let wave=1, kills=0, damage=1, regenBonus=0, speedBonus=0;
+let shootCooldown=500, lastShot=0, inShop=false;
+const mapPadding = 60;
+
+// INPUT
 addEventListener("keydown",e=>{
-  if(rebinding){keybinds[rebinding]=e.key.toLowerCase();document.getElementById("bind-"+rebinding).innerText=e.key.toUpperCase();rebinding=null;return;}
   keys[e.key.toLowerCase()]=true;
-  if(e.key.toLowerCase()===keybinds.pause) togglePause();
+  if(e.key.toLowerCase()==="p") paused=!paused;
 });
 addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 addEventListener("mousemove",e=>{mouse.x=e.clientX;mouse.y=e.clientY});
-addEventListener("mousedown",()=>{if(!paused) shoot();});
+addEventListener("mousedown",shoot);
 
-function startRebind(a){rebinding=a;document.getElementById("bind-"+a).innerText="...";}
-
+// MENU
 function startGame(){
   document.getElementById("menu").style.display="none";
   canvas.style.display="block";
-  document.getElementById("stats").style.display="block";
-  document.getElementById("pauseBtn").style.display="block";
-  bgm.play();spawnWave();update();
-}
-function openSettings(){menu.style.display="none";settings.style.display="block";}
-function closeSettings(){settings.style.display="none";menu.style.display="flex";}
-
-function togglePause(){
-  paused=!paused;
-  pauseOverlay.style.display=paused?"flex":"none";
-  if(paused){
-    document.getElementById("p-wave").innerText=wave;
-    document.getElementById("p-kills").innerText=kills;
-  }
+  bgm.play();
+  resetGame();
+  spawnWave();
+  update();
 }
 
-function selectPerk(el){
-  document.querySelectorAll(".perk").forEach(p=>p.classList.remove("selected"));
-  el.classList.add("selected");selectedPerk=el.dataset.perk;
-}
-function confirmPerk(){
-  if(!selectedPerk) return;
-  if(selectedPerk==="damage") damage++;
-  if(selectedPerk==="regen") regenBonus+=0.05;
-  if(selectedPerk==="firerate"&&shootCooldown>200) shootCooldown-=50;
-  if(selectedPerk==="speed") player.speed+=0.5;
-  perkStacks[selectedPerk]++;
-  document.getElementById("stack-"+selectedPerk).innerText=perkStacks[selectedPerk];
-  selectedPerk=null;shop.style.display="none";inShop=false;wave++;spawnWave();
+function resetGame(){
+  bullets=[]; zombies=[];
+  wave=1; kills=0;
+  damage=1; regenBonus=0; speedBonus=0;
+  shootCooldown=500;
+  player.health=player.maxHealth;
+  player.x=canvas.width/2;
+  player.y=canvas.height/2;
+  paused=false;
 }
 
+// SHOOT
 function shoot(){
-  if(Date.now()-lastShot<shootCooldown||inShop) return;
+  if(inShop || paused || Date.now()-lastShot<shootCooldown) return;
   lastShot=Date.now();
   const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
   bullets.push({x:player.x,y:player.y,dx:Math.cos(a)*10,dy:Math.sin(a)*10});
 }
 
-function spawnZombie(){
-  let z={x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:20,speed:1.5,health:3};
-  z.maxHealth=z.health;zombies.push(z);
+// ZOMBIES
+function spawnZombie(type){
+  let z={x:Math.random()*canvas.width,y:Math.random()*canvas.height};
+  if(type==="fast"){z.r=15;z.speed=3;z.health=2;}
+  else if(type==="tank"){z.r=28;z.speed=1;z.health=6+wave;}
+  else if(type==="boss"){z.r=40;z.speed=1+wave*.05;z.health=15+wave*2;z.boss=true;}
+  else {z.r=20;z.speed=1.5;z.health=3;}
+  z.maxHealth=z.health;
+  zombies.push(z);
 }
-function spawnWave(){zombies=[];for(let i=0;i<wave*2;i++) spawnZombie();}
+function spawnWave(){
+  zombies=[];
+  for(let i=0;i<wave*2;i++){
+    spawnZombie(Math.random()<.2?"fast":Math.random()<.35?"tank":"normal");
+  }
+  if(wave%10===0) spawnZombie("boss");
+}
 
+// SHOP
+function perk(p){
+  if(p==="damage") damage++;
+  if(p==="regen") regenBonus+=0.05;
+  if(p==="firerate" && shootCooldown>200) shootCooldown-=50;
+  if(p==="speed") speedBonus+=0.5;
+}
+function nextWave(){
+  inShop=false;
+  document.getElementById("shop").style.display="none";
+  wave++;
+  spawnWave();
+}
+
+// GAME LOOP
 function update(){
-  if(paused){requestAnimationFrame(update);return;}
+  requestAnimationFrame(update);
+  if(paused) return;
+
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  if(keys[keybinds.up]) player.y-=player.speed;
-  if(keys[keybinds.down]) player.y+=player.speed;
-  if(keys[keybinds.left]) player.x-=player.speed;
-  if(keys[keybinds.right]) player.x+=player.speed;
+  // MOVEMENT
+  const moveSpeed = player.speed + speedBonus;
+  if(keys.w) player.y-=moveSpeed;
+  if(keys.s) player.y+=moveSpeed;
+  if(keys.a) player.x-=moveSpeed;
+  if(keys.d) player.x+=moveSpeed;
 
-  ctx.beginPath();ctx.arc(player.x,player.y,player.r,0,Math.PI*2);ctx.fill();
+  player.x=Math.max(mapPadding,Math.min(canvas.width-mapPadding,player.x));
+  player.y=Math.max(mapPadding,Math.min(canvas.height-mapPadding,player.y));
 
-  zombies.forEach((z,i)=>{
-    const a=Math.atan2(player.y-z.y,player.x-z.x);
-    z.x+=Math.cos(a)*z.speed;z.y+=Math.sin(a)*z.speed;
-    ctx.beginPath();ctx.arc(z.x,z.y,z.r,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle="red";ctx.fillRect(z.x-20,z.y-z.r-10,40,5);
-    ctx.fillStyle="lime";ctx.fillRect(z.x-20,z.y-z.r-10,40*(z.health/z.maxHealth),5);
-    if(Math.hypot(player.x-z.x,player.y-z.y)<player.r+z.r){player.health-=0.1;}
+  // PLAYER
+  ctx.fillStyle="#d2b48c";
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+  ctx.fill();
+
+  // BULLETS
+  bullets.forEach((b,i)=>{
+    b.x+=b.dx; b.y+=b.dy;
+    ctx.fillStyle="#fff";
+    ctx.fillRect(b.x,b.y,4,4);
+    zombies.forEach((z,zi)=>{
+      if(Math.hypot(b.x-z.x,b.y-z.y)<z.r){
+        z.health-=damage;
+        bullets.splice(i,1);
+        if(z.health<=0){
+          zombies.splice(zi,1);
+          kills++;
+        }
+      }
+    });
   });
 
-  if(player.health<=0){
-    canvas.style.display="none";menu.style.display="flex";
-    stats.style.display="none";pauseBtn.style.display="none";
-    paused=false;return;
+  // ZOMBIES + HEALTH BARS
+  zombies.forEach(z=>{
+    const a=Math.atan2(player.y-z.y,player.x-z.x);
+    z.x+=Math.cos(a)*z.speed;
+    z.y+=Math.sin(a)*z.speed;
+
+    if(Math.hypot(player.x-z.x,player.y-z.y)<player.r+z.r){
+      if(Date.now()-player.lastHit>800){
+        player.health-=10;
+        player.lastHit=Date.now();
+      }
+    }
+
+    ctx.fillStyle=z.boss?"#8b0000":"#228b22";
+    ctx.beginPath();
+    ctx.arc(z.x,z.y,z.r,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle="red";
+    ctx.fillRect(z.x-20,z.y-z.r-10,40,5);
+    ctx.fillStyle="lime";
+    ctx.fillRect(z.x-20,z.y-z.r-10,40*(z.health/z.maxHealth),5);
+  });
+
+  // REGEN
+  if(Date.now()-player.lastHit>3000 && player.health<player.maxHealth){
+    player.health+=0.1+regenBonus;
   }
 
-  s-dmg.innerText=damage;
-  s-fire.innerText=shootCooldown;
-  s-speed.innerText=player.speed.toFixed(1);
-  s-regen.innerText=regenBonus.toFixed(2);
+  // DEATH → MENU
+  if(player.health<=0){
+    canvas.style.display="none";
+    document.getElementById("menu").style.display="flex";
+    bgm.pause();
+    return;
+  }
 
-  if(zombies.length===0&&!inShop){inShop=true;shop.style.display="block";}
-  requestAnimationFrame(update);
+  // UI
+  ctx.fillStyle="white";
+  ctx.font="12px Arial";
+  ctx.fillText(
+    `DMG:${damage} SPD:+${speedBonus} REG:+${regenBonus.toFixed(2)} FR:${shootCooldown}ms`,
+    10,canvas.height-10
+  );
+
+  ctx.fillText("Wave "+wave,canvas.width-80,20);
+
+  ctx.fillStyle="red";
+  ctx.fillRect(canvas.width/2-100,canvas.height-40,200,12);
+  ctx.fillStyle="lime";
+  ctx.fillRect(canvas.width/2-100,canvas.height-40,200*(player.health/player.maxHealth),12);
+
+  if(zombies.length===0 && !inShop){
+    inShop=true;
+    document.getElementById("shop").style.display="block";
+  }
 }
 </script>
 </body>
