@@ -1,13 +1,152 @@
-<div id="stats">
-  <div><b>STATS</b></div>
-  <div id="stat-damage">Damage: 1</div>
-  <div id="stat-firerate">Fire Rate: 500ms</div>
-  <div id="stat-speed">Speed: 4</div>
-  <div id="stat-regen">Regen: 0</div>
-  <hr>
-  <div><b>PERKS</b></div>
-  <div id="perk-damage">Damage x0</div>
-  <div id="perk-firerate">Fire Rate x0</div>
-  <div id="perk-regen">Regen x0</div>
-  <div id="perk-speed">Speed x0</div>
+<!-- STAT BAR -->
+<div id="statBar">
+  <div id="stat-speed">Speed: +0%</div>
+  <div id="stat-health">Health: +0</div>
+  <div id="stat-firerate">Fire Rate: +0%</div>
 </div>
+
+<!-- CROSSHAIR -->
+<div id="crosshair"></div>
+
+<style>
+/* STAT BAR */
+#statBar{
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  font-size: 11px;
+  color: white;
+  opacity: 0.85;
+  pointer-events: none;
+  line-height: 1.3;
+  z-index: 9998;
+}
+
+/* CROSSHAIR */
+#crosshair{
+  position: fixed;
+  width: 20px;
+  height: 20px;
+  border: 2px solid white;
+  border-radius: 50%;
+  transform-origin: center;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.crosshair-spin{
+  animation: crosshairSpin 1s linear infinite;
+}
+
+.crosshair-shoot{
+  border-color: red;
+}
+
+@keyframes crosshairSpin{
+  from{ transform: rotate(0deg); }
+  to{ transform: rotate(360deg); }
+}
+
+/* PAUSE VISUAL */
+.paused{
+  filter: grayscale(0.7);
+}
+</style>
+
+<script>
+/* =========================
+   PERK STATS (SAFE MERGE)
+========================= */
+window.perkStats = window.perkStats || {
+  speed: 0,
+  health: 0,
+  fireRate: 0
+};
+
+function updateStatBar(){
+  document.getElementById("stat-speed").textContent =
+    "Speed: +" + (perkStats.speed * 10) + "%";
+  document.getElementById("stat-health").textContent =
+    "Health: +" + (perkStats.health * 25);
+  document.getElementById("stat-firerate").textContent =
+    "Fire Rate: +" + (perkStats.fireRate * 10) + "%";
+}
+
+/* =========================
+   CROSSHAIR LOGIC
+========================= */
+const crosshair = document.getElementById("crosshair");
+let lastShotTime = 0;
+
+document.addEventListener("mousemove", e=>{
+  crosshair.style.left = (e.clientX - 10) + "px";
+  crosshair.style.top = (e.clientY - 10) + "px";
+});
+
+function onShoot(){
+  const fireRate = window.fireRate || 300;
+  lastShotTime = Date.now();
+
+  crosshair.classList.add("crosshair-shoot");
+  crosshair.classList.remove("crosshair-spin");
+
+  setTimeout(()=>{
+    crosshair.classList.remove("crosshair-shoot");
+  }, fireRate * 0.5);
+}
+
+function updateCrosshair(){
+  const fireRate = window.fireRate || 300;
+
+  if(Date.now() - lastShotTime > fireRate){
+    crosshair.classList.add("crosshair-spin");
+  }
+
+  requestAnimationFrame(updateCrosshair);
+}
+updateCrosshair();
+
+/* =========================
+   PAUSE (R KEY)
+========================= */
+let paused = false;
+
+document.addEventListener("keydown", e=>{
+  if(e.key.toLowerCase() === "r"){
+    paused = !paused;
+    document.body.classList.toggle("paused", paused);
+  }
+});
+
+/* =========================
+   SAFE GAME LOOP WRAPPER
+========================= */
+const originalGameLoop = window.gameLoop || function(){};
+
+window.gameLoop = function(){
+  if(paused){
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+  originalGameLoop();
+  requestAnimationFrame(gameLoop);
+};
+
+/* =========================
+   PERK HOOK (NO UI CHANGE)
+========================= */
+const originalSelectPerk = window.selectPerk;
+
+window.selectPerk = function(el){
+  if(originalSelectPerk) originalSelectPerk(el);
+
+  const perk = el.dataset.perk;
+  if(perk === "speed") perkStats.speed++;
+  if(perk === "health") perkStats.health++;
+  if(perk === "firerate") perkStats.fireRate++;
+
+  updateStatBar();
+};
+</script>
+
+
