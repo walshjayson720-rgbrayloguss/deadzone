@@ -66,7 +66,6 @@ canvas { display:none; }
   position:relative;
   transition:.2s;
 }
-
 .perk:hover { background:#222; }
 
 .perk.selected {
@@ -81,7 +80,6 @@ canvas { display:none; }
   font-size:14px;
 }
 
-/* STACK COUNT */
 .stack {
   position:absolute;
   top:5px;
@@ -140,6 +138,11 @@ canvas { display:none; }
       <small>Shoot more often</small>
       <div class="stack" id="stack-firerate">0</div>
     </div>
+    <div class="perk" data-perk="speed" onclick="selectPerk(this)">
+      +Speed
+      <small>Move faster</small>
+      <div class="stack" id="stack-speed">0</div>
+    </div>
   </div>
   <br><br>
   <button class="menu-btn" onclick="confirmPerk()">Continue</button>
@@ -176,7 +179,7 @@ const mapPadding = 60;
 
 // PERKS
 let selectedPerk = null;
-let perkStacks = { damage:0, regen:0, firerate:0 };
+let perkStacks = { damage:0, regen:0, firerate:0, speed:0 };
 
 // INPUT
 addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
@@ -214,6 +217,7 @@ function confirmPerk(){
   if(selectedPerk==="damage") damage++;
   if(selectedPerk==="regen") regenBonus+=0.05;
   if(selectedPerk==="firerate" && shootCooldown>200) shootCooldown-=50;
+  if(selectedPerk==="speed") player.speed+=0.5;
 
   perkStacks[selectedPerk]++;
   document.getElementById("stack-"+selectedPerk).innerText = perkStacks[selectedPerk];
@@ -318,10 +322,37 @@ function update(){
     ctx.beginPath();
     ctx.arc(z.x,z.y,z.r,0,Math.PI*2);
     ctx.fill();
+
+    // ZOMBIE HEALTH BAR
+    ctx.fillStyle="red";
+    ctx.fillRect(z.x-20,z.y-z.r-10,40,5);
+    ctx.fillStyle="lime";
+    ctx.fillRect(z.x-20,z.y-z.r-10,40*(z.health/z.maxHealth),5);
   });
 
   if(Date.now()-player.lastHit>3000 && player.health<player.maxHealth){
     player.health+=0.1+regenBonus;
+  }
+
+  // PLAYER DEATH → MAIN MENU
+  if(player.health<=0){
+    bullets=[];
+    zombies=[];
+    wave=1;
+    kills=0;
+    damage=1;
+    regenBonus=0;
+    shootCooldown=500;
+    player.health=player.maxHealth;
+    player.speed=4;
+    inShop=false;
+
+    document.getElementById("shop").style.display="none";
+    canvas.style.display="none";
+    document.getElementById("menu").style.display="flex";
+    bgm.pause();
+    bgm.currentTime=0;
+    return;
   }
 
   ctx.fillStyle="white";
