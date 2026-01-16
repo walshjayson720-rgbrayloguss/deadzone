@@ -1,11 +1,18 @@
-<!-- STAT BAR -->
+<!-- ===== EXISTING PERK (UNCHANGED) ===== -->
+<div class="perk" data-perk="speed" onclick="selectPerk(this)">
+  +Speed
+  <small>Move faster</small>
+  <div class="stack" id="stack-speed">0</div>
+</div>
+
+<!-- ===== STAT BAR ===== -->
 <div id="statBar">
   <div id="stat-speed">Speed: +0%</div>
   <div id="stat-health">Health: +0</div>
   <div id="stat-firerate">Fire Rate: +0%</div>
 </div>
 
-<!-- CROSSHAIR -->
+<!-- ===== CROSSHAIR ===== -->
 <div id="crosshair"></div>
 
 <style>
@@ -29,8 +36,8 @@
   height: 20px;
   border: 2px solid white;
   border-radius: 50%;
-  transform-origin: center;
   pointer-events: none;
+  transform-origin: center;
   z-index: 9999;
 }
 
@@ -47,16 +54,16 @@
   to{ transform: rotate(360deg); }
 }
 
-/* PAUSE VISUAL */
+/* PAUSED EFFECT */
 .paused{
   filter: grayscale(0.7);
 }
 </style>
 
 <script>
-/* =========================
-   PERK STATS (SAFE MERGE)
-========================= */
+/* ===============================
+   GLOBAL PERK STATS (SAFE)
+================================ */
 window.perkStats = window.perkStats || {
   speed: 0,
   health: 0,
@@ -72,9 +79,9 @@ function updateStatBar(){
     "Fire Rate: +" + (perkStats.fireRate * 10) + "%";
 }
 
-/* =========================
-   CROSSHAIR LOGIC
-========================= */
+/* ===============================
+   CROSSHAIR
+================================ */
 const crosshair = document.getElementById("crosshair");
 let lastShotTime = 0;
 
@@ -97,18 +104,16 @@ function onShoot(){
 
 function updateCrosshair(){
   const fireRate = window.fireRate || 300;
-
   if(Date.now() - lastShotTime > fireRate){
     crosshair.classList.add("crosshair-spin");
   }
-
   requestAnimationFrame(updateCrosshair);
 }
 updateCrosshair();
 
-/* =========================
-   PAUSE (R KEY)
-========================= */
+/* ===============================
+   PAUSE / UNPAUSE (R)
+================================ */
 let paused = false;
 
 document.addEventListener("keydown", e=>{
@@ -118,27 +123,27 @@ document.addEventListener("keydown", e=>{
   }
 });
 
-/* =========================
-   SAFE GAME LOOP WRAPPER
-========================= */
-const originalGameLoop = window.gameLoop || function(){};
+/* ===============================
+   GAME LOOP WRAP (SAFE)
+================================ */
+const _gameLoop = window.gameLoop || function(){};
 
 window.gameLoop = function(){
   if(paused){
     requestAnimationFrame(gameLoop);
     return;
   }
-  originalGameLoop();
+  _gameLoop();
   requestAnimationFrame(gameLoop);
 };
 
-/* =========================
-   PERK HOOK (NO UI CHANGE)
-========================= */
-const originalSelectPerk = window.selectPerk;
+/* ===============================
+   PERK SELECTION WRAP (SAFE)
+================================ */
+const _selectPerk = window.selectPerk;
 
 window.selectPerk = function(el){
-  if(originalSelectPerk) originalSelectPerk(el);
+  if(_selectPerk) _selectPerk(el);
 
   const perk = el.dataset.perk;
   if(perk === "speed") perkStats.speed++;
@@ -148,5 +153,3 @@ window.selectPerk = function(el){
   updateStatBar();
 };
 </script>
-
-
